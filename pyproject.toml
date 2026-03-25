@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "capability-cartography-layer-3"
+version = "0.3.0"
+description = "A third-generation capability cartography framework extending Layer 2 with causal estimator sweeps, identification-aware failure atlases, middle-regime analysis, and transfer diagnostics."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [
+  { name = "Paul \"The Pageman\" Pajo" }
+]
+dependencies = [
+  "matplotlib",
+  "numpy",
+  "PyYAML",
+  "scipy",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
