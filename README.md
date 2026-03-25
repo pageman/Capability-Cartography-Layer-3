@@ -42,6 +42,47 @@ If you want the shortest reader-friendly interpretation of what the current resu
 2. Whether these laws transfer to GPT-4-scale models
 3. A mathematical theory of the "middle regime" itself
 
+## Narrative Arc And Methodological Arc
+
+### Narrative Arc
+
+Layer 1 asked what happened. Layer 2 asked what kind of failure happened. Layer 3 asks why a mechanism does or does not causally explain a capability. The arc of the project is therefore a progression from measurement, to classification, to explanation, and finally to explicit criteria for when a causal claim is justified.
+
+### Methodological Arc
+
+The methodological arc mirrors that narrative progression: run the system end to end, preserve comparability with earlier layers, make estimator assumptions explicit, separate historical baseline notes from current outputs, and require verdicts to follow an explicit policy rather than a vague confidence threshold.
+
+### Story Boxes
+
+`Story Box 1: From Prototype To Instrument`
+Layer 3 is not only meant to run; it is meant to support inspectable causal claims.
+
+`Story Box 2: Baseline Is Not Ground Truth`
+Historical notes and current artifacts can disagree; when they do, the current exported artifacts are the source of truth for the repository.
+
+`Story Box 3: Retrieval Is The Boundary Case`
+Retrieval papers remain the hardest regime because unpaired structure reduces estimator applicability and exposes the limits of naive causal claims.
+
+`Story Box 4: The Framework Must Judge Itself`
+The project now evaluates not only papers, but also the reliability of its own verdicting, ranking, and pathology labeling.
+
+### Method Boxes
+
+`Method Box 1: End-to-End Validation`
+Re-run tests and demo after each structural change so the repo is treated as an empirical instrument, not static code.
+
+`Method Box 2: Cross-Layer Consistency`
+Compare Layer 3 against Layers 1 and 2 at the package, artifact, and documentation levels to preserve continuity of the research program.
+
+`Method Box 3: Explicit Verdict Policy`
+Assign `CONFIRMED`, `CONDITIONAL`, and `UNCONFIRMED` through a named policy with applicability and consensus thresholds.
+
+`Method Box 4: Estimator Ranking Discipline`
+Only rank estimators as “best” when the implementation is exact rather than proxy or fallback.
+
+`Method Box 5: Normalized Pathology Prediction`
+Predict causal-atlas labels in normalized feature space so large-magnitude features do not dominate the classification.
+
 ## What Layer 3 Adds
 
 ### Five New Modules
