@@ -5,6 +5,7 @@ causal visualization, plus inherited Layer 2 functionality.
 """
 
 import unittest
+import warnings
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
@@ -105,6 +106,20 @@ class RealIVEstimatorTests(unittest.TestCase):
                       np.array([0.5, 0.3, 0.7, 0.4]),
                       np.array([0.1, 0.1, 0.1, 0.1]))
         self.assertEqual(r.name, "MR_Egger")
+
+    def test_tsls_no_runtime_warnings(self):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("error", RuntimeWarning)
+            r = tsls(self.paired["Z"], self.paired["X"], self.paired["Y"])
+        self.assertEqual(len(caught), 0)
+        self.assertTrue(np.all(np.isfinite(r.se)))
+
+    def test_ivw_zero_denominator_is_warning_free(self):
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("error", RuntimeWarning)
+            r = ivw(np.array([0.0, 0.3, 0.0]), np.array([0.5, 0.3, 0.7]), np.array([0.1, 0.1, 0.1]))
+        self.assertEqual(len(caught), 0)
+        self.assertTrue(np.isfinite(r.scalar()))
 
     def test_generate_paired_data(self):
         d = generate_iv_data(n=100, m=5, d=1)

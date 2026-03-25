@@ -7,7 +7,7 @@ Layer 3: Explanation (causal registry, IV estimators, estimator sweep,
                       paper registry, causal visualization)
 """
 
-# Layer 1
+# Core schemas
 from .schemas import (
     ArtifactBundle,
     BoundaryEvent,
@@ -34,8 +34,12 @@ from .schemas import (
 from .adapters import AgentOverlayAdapter, GPT1WindTunnelAdapter, NotebookSubstrateAdapter
 from .boundary import BoundaryAnalyzer
 from .compressibility import CompressibilityStack
+from .datasets import TaskFamilyDatasetBuilder
 from .descriptors import TaskDescriptorExtractor
+from .execution import MeasuredRunExecutor
 from .metrics import aggregate_snapshot_metrics, calibration_error, estimate_capability_score
+from .notebook_runner import NotebookExecutionWrapper
+from .provenance import repository_provenance
 from .runner import CapabilityCartographyRunner
 from .storage import RunStorage
 from .surfaces import CapabilitySurfaceFitter
@@ -60,3 +64,67 @@ from .paper_registry import PaperEntry, PaperRegistry
 from .transfer_diagnostics import TransferDiagnosticsRunner
 
 __version__ = "0.3.0"
+
+__all__ = [
+    "AgentOverlayAdapter",
+    "ArtifactBundle",
+    "BeyondNumpyAdapter",
+    "BoundaryAnalyzer",
+    "BoundaryEvent",
+    "BoundaryFit",
+    "CapabilityCartographyRunner",
+    "CapabilitySnapshot",
+    "CapabilitySurfaceFitter",
+    "CapabilityTrajectory",
+    "CartographyVisualizer",
+    "CausalAtlasClassifier",
+    "CausalEstimator",
+    "CausalEstimatorRegistry",
+    "CausalRecord",
+    "CompressibilityProfile",
+    "CompressibilityStack",
+    "EstimatorResult",
+    "EstimatorSweepRunner",
+    "ExperimentSpec",
+    "FailureAtlasClassifier",
+    "FullStudyOrchestrator",
+    "GPT1WindTunnelAdapter",
+    "InterventionConfig",
+    "InterventionSweep",
+    "MeasuredRunExecutor",
+    "MiddleRegimeAnalyzer",
+    "MiddleRegimeProfile",
+    "NotebookExecutionWrapper",
+    "NotebookSubstrateAdapter",
+    "PaperEntry",
+    "PaperRegistry",
+    "PredictiveLawValidator",
+    "RunStorage",
+    "SutskeverAgentWorkflowBridge",
+    "SweepRunner",
+    "TaskDescriptor",
+    "TaskDescriptorExtractor",
+    "TaskFamilyDatasetBuilder",
+    "TransferDiagnostic",
+    "TransferDiagnosticsRunner",
+    "aggregate_snapshot_metrics",
+    "calibration_error",
+    "classify_regime",
+    "estimate_capability_score",
+    "fuller",
+    "generate_iv_data",
+    "ivw",
+    "liml",
+    "measurement_error_bias",
+    "mr_egger",
+    "ols",
+    "plot_estimator_heatmap",
+    "plot_regime_map",
+    "plot_verdict_dashboard",
+    "repository_provenance",
+    "splitup",
+    "splitup_analytic",
+    "ts_iv",
+    "tsls",
+    "up_gmm",
+]

@@ -38,6 +38,13 @@ def _safe_inv(A: np.ndarray) -> np.ndarray:
         return np.linalg.pinv(A)
 
 
+def _safe_standard_errors(covariance: np.ndarray) -> np.ndarray:
+    """Convert a covariance matrix into finite standard errors."""
+    diag = np.real(np.diag(covariance))
+    diag = np.where(np.isfinite(diag), diag, 0.0)
+    return np.sqrt(np.clip(diag, 0.0, None))
+
+
 # ====================================================================
 # OLS — biased baseline
 # ====================================================================
@@ -53,7 +60,7 @@ def ols(X: np.ndarray, Y: np.ndarray) -> IVResult:
     beta = _safe_inv(XtX) @ XtY
     resid = Y - X @ beta
     sigma2 = float(np.sum(resid ** 2) / max(len(Y) - X.shape[1], 1))
-    se = np.sqrt(np.diag(sigma2 * _safe_inv(XtX)))
+    se = _safe_standard_errors(sigma2 * _safe_inv(XtX))
     return IVResult(name="OLS", beta=beta, se=se, residual_var=sigma2)
 
 
@@ -78,7 +85,7 @@ def tsls(Z: np.ndarray, X: np.ndarray, Y: np.ndarray) -> IVResult:
     resid = Y - X @ beta
     sigma2 = float(np.sum(resid ** 2) / max(n - X.shape[1], 1))
     V = sigma2 * _safe_inv(Xhat.T @ Xhat)
-    se = np.sqrt(np.diag(V))
+    se = _safe_standard_errors(V)
     # First-stage F
     Xbar = np.mean(X, axis=0)
     ss_model = float(np.sum((Xhat - Xbar) ** 2))
@@ -115,7 +122,7 @@ def liml(Z: np.ndarray, X: np.ndarray, Y: np.ndarray) -> IVResult:
     beta = _safe_inv(X.T @ A @ X) @ (X.T @ A @ Y)
     resid = Y - X @ beta
     sigma2 = float(np.sum(resid ** 2) / max(n - X.shape[1], 1))
-    se = np.sqrt(np.diag(sigma2 * _safe_inv(X.T @ A @ X))) if sigma2 > 0 else np.zeros(X.shape[1])
+    se = _safe_standard_errors(sigma2 * _safe_inv(X.T @ A @ X)) if sigma2 > 0 else np.zeros(X.shape[1])
     return IVResult(name="LIML", beta=beta, se=se, residual_var=sigma2)
 
 
@@ -144,7 +151,7 @@ def fuller(Z: np.ndarray, X: np.ndarray, Y: np.ndarray, *, alpha: float = 1.0) -
     beta = _safe_inv(X.T @ A @ X) @ (X.T @ A @ Y)
     resid = Y - X @ beta
     sigma2 = float(np.sum(resid ** 2) / max(n - X.shape[1], 1))
-    se = np.sqrt(np.diag(sigma2 * _safe_inv(X.T @ A @ X))) if sigma2 > 0 else np.zeros(X.shape[1])
+    se = _safe_standard_errors(sigma2 * _safe_inv(X.T @ A @ X)) if sigma2 > 0 else np.zeros(X.shape[1])
     return IVResult(name="Fuller_k", beta=beta, se=se, residual_var=sigma2)
 
 
@@ -303,7 +310,8 @@ def ivw(beta_X: np.ndarray, beta_Y: np.ndarray, se_X: np.ndarray) -> IVResult:
     se_X = np.atleast_1d(se_X).ravel()
     # Wald ratios
     valid = np.abs(beta_X) > 1e-10
-    ratios = np.where(valid, beta_Y / beta_X, 0.0)
+    ratios = np.zeros_like(beta_Y, dtype=float)
+    np.divide(beta_Y, beta_X, out=ratios, where=valid)
     weights = np.where(valid, beta_X ** 2 / (se_X ** 2 + 1e-12), 0.0)
     if np.sum(weights) < 1e-12:
         return IVResult(name="IVW", beta=np.array([0.0]))
@@ -321,6 +329,8 @@ def mr_egger(beta_X: np.ndarray, beta_Y: np.ndarray, se_X: np.ndarray) -> IVResu
     beta_X = np.atleast_1d(beta_X).ravel()
     beta_Y = np.atleast_1d(beta_Y).ravel()
     se_X = np.atleast_1d(se_X).ravel()
+    if beta_X.size < 2:
+        return IVResult(name="MR_Egger", beta=np.array([0.0]), converged=False)
     W = np.diag(1.0 / (se_X ** 2 + 1e-12))
     ones = np.ones_like(beta_X)
     D = np.column_stack([ones, beta_X])
