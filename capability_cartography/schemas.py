@@ -240,6 +240,8 @@ class EstimatorResult:
     causal_detected: bool = False
     ci_lower: float = 0.0
     ci_upper: float = 0.0
+    implementation_mode: str = "exact"
+    ranking_eligible: bool = True
     reason: str = ""
 
     def to_dict(self) -> Dict[str, Any]:

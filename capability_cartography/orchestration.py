@@ -26,6 +26,7 @@ from .schemas import ExperimentSpec, InterventionConfig
 from .storage import RunStorage
 from .sweeps import SweepRunner
 from .transfer_diagnostics import TransferDiagnosticsRunner
+from .verdict_policy import VerdictPolicy
 from .visualization import CartographyVisualizer
 
 
@@ -46,6 +47,7 @@ class FullStudyOrchestrator:
         self.causal_atlas = CausalAtlasClassifier()
         self.middle_regime = MiddleRegimeAnalyzer()
         self.transfer_diag = TransferDiagnosticsRunner()
+        self.verdict_policy = VerdictPolicy()
         self.storage = RunStorage(self.output_root)
 
     def run(self, *, spec: ExperimentSpec, intervention: InterventionConfig) -> Dict[str, Any]:
@@ -88,6 +90,12 @@ class FullStudyOrchestrator:
             paper = self.paper_registry.get(pid)
             results = all_paper_results.get(pid, [])
             cons = self.estimator_sweep.consensus(results)
+            policy = self.verdict_policy.evaluate(
+                paper_type=paper.paper_type,
+                n_applicable=cons["n_applicable"],
+                consensus=cons["consensus"],
+                backend_evidence=0,
+            )
             causal_records.append({
                 "paper_id": pid,
                 "paper_name": paper.title,
@@ -106,10 +114,8 @@ class FullStudyOrchestrator:
                 "retrieval_dependence": 1.0 if paper.paper_type == "retrieval" else 0.0,
                 "capability_score": max(0.1, 0.35 + 0.3 * cons["consensus"] - 0.15 * (1.0 if paper.paper_type == "retrieval" else 0.0)),
                 "generalization_gap": cons["avg_bias"] - 0.05,
-                "causality_verdict": (
-                    "CONFIRMED" if cons["consensus"] > 0.6 else
-                    "CONDITIONAL" if cons["consensus"] > 0.3 else "UNCONFIRMED"
-                ),
+                "causality_verdict": policy["verdict"],
+                "verdict_reason": policy["reason"],
                 "causal_question": paper.causal_question,
             })
 

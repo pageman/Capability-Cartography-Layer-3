@@ -42,6 +42,8 @@ class CausalAtlasClassifier:
 
     def __init__(self) -> None:
         self.centroids: Dict[str, np.ndarray] = {}
+        self.feature_center: np.ndarray | None = None
+        self.feature_scale: np.ndarray | None = None
         self.feature_keys = [
             "estimator_consensus",
             "retrieval_dependence",
@@ -99,8 +101,17 @@ class CausalAtlasClassifier:
         for rec, lbl in labeled:
             by_label.setdefault(lbl, []).append(self._vector(rec))
 
+        all_vectors = np.stack([self._vector(rec) for rec, _ in labeled]) if labeled else np.zeros((0, len(self.feature_keys)))
+        if len(all_vectors) > 0:
+            self.feature_center = np.mean(all_vectors, axis=0)
+            self.feature_scale = np.std(all_vectors, axis=0)
+            self.feature_scale = np.where(self.feature_scale > 1e-9, self.feature_scale, 1.0)
+        else:
+            self.feature_center = None
+            self.feature_scale = None
+
         self.centroids = {
-            lbl: np.mean(np.stack(vecs), axis=0)
+            lbl: np.mean(np.stack([self._normalize(vec) for vec in vecs]), axis=0)
             for lbl, vecs in by_label.items()
             if vecs
         }
@@ -132,7 +143,7 @@ class CausalAtlasClassifier:
     def predict(self, record: Dict[str, Any]) -> Dict[str, Any]:
         if not self.centroids:
             return {"label": self.label(record), "distances": {}}
-        vec = self._vector(record)
+        vec = self._normalize(self._vector(record))
         distances = {
             lbl: float(np.linalg.norm(vec - c))
             for lbl, c in self.centroids.items()
@@ -148,3 +159,8 @@ class CausalAtlasClassifier:
 
     def _vector(self, record: Dict[str, Any]) -> np.ndarray:
         return np.array([float(record.get(k, 0)) for k in self.feature_keys], dtype=float)
+
+    def _normalize(self, vector: np.ndarray) -> np.ndarray:
+        if self.feature_center is None or self.feature_scale is None:
+            return vector
+        return (vector - self.feature_center) / self.feature_scale

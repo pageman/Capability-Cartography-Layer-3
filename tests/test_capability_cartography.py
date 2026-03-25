@@ -34,6 +34,7 @@ from capability_cartography.schemas import (
 )
 from capability_cartography.transfer_diagnostics import TransferDiagnosticsRunner
 from capability_cartography.validation import PredictiveLawValidator
+from capability_cartography.verdict_policy import VerdictPolicy
 
 
 class RealIVEstimatorTests(unittest.TestCase):
@@ -190,7 +191,13 @@ class EstimatorSweepTests(unittest.TestCase):
         self.assertIn("n_applicable", cons)
         self.assertIn("consensus", cons)
         self.assertIn("best_estimator", cons)
+        self.assertIn("best_estimator_mode", cons)
         self.assertGreater(cons["consensus"], 0.5)
+
+    def test_best_estimator_prefers_exact_implementations(self):
+        sweeper = EstimatorSweepRunner()
+        cons = sweeper.consensus(sweeper.sweep_paper(13))
+        self.assertEqual(cons["best_estimator_mode"], "exact")
 
     def test_sweep_all_30(self):
         sweeper = EstimatorSweepRunner()
@@ -254,6 +261,34 @@ class CausalAtlasTests(unittest.TestCase):
         with TemporaryDirectory() as td:
             path = cls.export(Path(td) / "atlas.json", summary)
             self.assertTrue(Path(path).exists())
+
+    def test_predict_matches_training_labels_on_simple_records(self):
+        cls = CausalAtlasClassifier()
+        records = [
+            {"paper_id": 1, "paper_name": "a", "estimator_consensus": 0.96, "retrieval_dependence": 0.0, "n_applicable": 27, "n_consistent": 26, "avg_estimator_bias": 0.02, "paper_type": "architecture"},
+            {"paper_id": 2, "paper_name": "b", "estimator_consensus": 0.45, "retrieval_dependence": 1.0, "n_applicable": 14, "n_consistent": 8, "avg_estimator_bias": 0.06, "paper_type": "retrieval"},
+            {"paper_id": 3, "paper_name": "c", "estimator_consensus": 0.50, "retrieval_dependence": 0.0, "n_applicable": 13, "n_consistent": 7, "avg_estimator_bias": 0.03, "paper_type": "theory"},
+        ]
+        summary = cls.train(records)
+        mismatches = [r for r in summary["records"] if r["actual_label"] != r["predicted_label"]]
+        self.assertEqual(mismatches, [])
+
+
+class VerdictPolicyTests(unittest.TestCase):
+    def test_architecture_confirmed_requires_strong_consensus(self):
+        p = VerdictPolicy()
+        out = p.evaluate(paper_type="architecture", n_applicable=27, consensus=0.9)
+        self.assertEqual(out["verdict"], "CONFIRMED")
+
+    def test_theory_stays_conditional(self):
+        p = VerdictPolicy()
+        out = p.evaluate(paper_type="theory", n_applicable=13, consensus=1.0)
+        self.assertEqual(out["verdict"], "CONDITIONAL")
+
+    def test_retrieval_with_low_consensus_unconfirmed(self):
+        p = VerdictPolicy()
+        out = p.evaluate(paper_type="retrieval", n_applicable=13, consensus=0.2)
+        self.assertEqual(out["verdict"], "UNCONFIRMED")
 
 
 class MiddleRegimeTests(unittest.TestCase):

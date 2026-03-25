@@ -101,6 +101,7 @@ class EstimatorSweepRunner:
         applicable = [r for r in results if r.applicable]
         consistent = [r for r in applicable if r.consistent]
         detected = [r for r in applicable if r.causal_detected]
+        ranking_pool = [r for r in applicable if r.ranking_eligible]
         n_app = len(applicable)
         return {
             "n_applicable": n_app,
@@ -110,7 +111,8 @@ class EstimatorSweepRunner:
             "detection_rate": len(detected) / max(n_app, 1),
             "avg_bias": float(np.mean([abs(r.bias) for r in applicable])) if applicable else 0.0,
             "avg_mse": float(np.mean([r.mse for r in applicable])) if applicable else 0.0,
-            "best_estimator": min(applicable, key=lambda r: r.mse).estimator if applicable else "none",
+            "best_estimator": min(ranking_pool, key=lambda r: r.mse).estimator if ranking_pool else "none",
+            "best_estimator_mode": min(ranking_pool, key=lambda r: r.mse).implementation_mode if ranking_pool else "none",
         }
 
     # ------------------------------------------------------------------
@@ -128,14 +130,14 @@ class EstimatorSweepRunner:
 
         # Applicability check
         if est.requires_paired and not is_paired:
-            return EstimatorResult(estimator=est.name, applicable=False, reason="requires paired data")
+            return EstimatorResult(estimator=est.name, applicable=False, ranking_eligible=False, reason="requires paired data")
 
         beta_scalar = float(beta_true[0]) if beta_true.size > 0 else 1.0
 
         try:
             iv_result = self._dispatch(est, data, is_paired, m)
         except Exception as exc:
-            return EstimatorResult(estimator=est.name, applicable=True, reason=f"error: {str(exc)[:60]}")
+            return EstimatorResult(estimator=est.name, applicable=True, implementation_mode="error", ranking_eligible=False, reason=f"error: {str(exc)[:60]}")
 
         est_val = iv_result.scalar()
         bias = est_val - beta_scalar
@@ -153,6 +155,9 @@ class EstimatorSweepRunner:
         else:
             consistent = est.consistent_finite_m
 
+        implementation_mode = self._implementation_mode(est, is_paired)
+        ranking_eligible = implementation_mode == "exact"
+
         return EstimatorResult(
             estimator=est.name,
             applicable=True,
@@ -164,7 +169,39 @@ class EstimatorSweepRunner:
             causal_detected=abs(est_val) > 0.5 * beta_scalar,
             ci_lower=round(float(est_val - 1.96 * se), 6),
             ci_upper=round(float(est_val + 1.96 * se), 6),
+            implementation_mode=implementation_mode,
+            ranking_eligible=ranking_eligible,
         )
+
+    @staticmethod
+    def _implementation_mode(est: CausalEstimator, is_paired: bool) -> str:
+        """Classify whether the estimator implementation is exact or proxied."""
+        exact_names = {
+            "Naive_OLS",
+            "2SLS",
+            "LIML",
+            "Fuller_k",
+            "TS_IV",
+            "UP_GMM",
+            "SplitUP_dense",
+            "SplitUP_analytic",
+            "IVW",
+            "MR_Egger",
+        }
+        if est.name in exact_names:
+            return "exact"
+        if est.name == "SplitUP_L1":
+            return "proxy"
+        if is_paired and est.name in {
+            "JIVE", "RJIVE", "SS_IV", "L1_Reg_2SLS", "Lasso_GMM",
+            "GMM_Lasso", "FGMM", "Desparsified_GMM", "Post_Dbl_Selection", "spaceIV",
+        }:
+            return "proxy"
+        if not is_paired and est.name in {
+            "TS_2SLS", "UP_GMM_L1", "spaceTSIV", "Weighted_Median", "Mode_Based_MR", "MR_PRESSO",
+        }:
+            return "proxy"
+        return "fallback"
 
     def _dispatch(self, est: CausalEstimator, data: dict, is_paired: bool, m: int) -> IVResult:
         """Route to the correct estimator implementation."""
