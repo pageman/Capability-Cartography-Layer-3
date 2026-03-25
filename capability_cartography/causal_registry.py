@@ -21,6 +21,51 @@ from typing import Dict, List, Sequence
 from .schemas import CausalEstimator
 
 
+ESTIMATOR_DISPLAY_NAMES: Dict[str, str] = {
+    "Naive_OLS": "Naive OLS",
+    "2SLS": "2SLS",
+    "LIML": "LIML",
+    "Fuller_k": "Fuller-k",
+    "JIVE": "JIVE",
+    "RJIVE": "RJIVE",
+    "SS_IV": "SS-IV",
+    "TS_IV": "TS-IV",
+    "TS_2SLS": "TS-2SLS",
+    "UP_GMM": "UP-GMM",
+    "UP_GMM_L1": "UP-GMM l1",
+    "SplitUP_dense": "SplitUP (dense)",
+    "SplitUP_L1": "SplitUP l1",
+    "SplitUP_analytic": "SplitUP (analytic)",
+    "L1_Reg_2SLS": "l1-Reg 2SLS",
+    "Lasso_GMM": "Lasso-GMM",
+    "GMM_Lasso": "GMM-Lasso",
+    "FGMM": "FGMM",
+    "Desparsified_GMM": "Desparsified GMM",
+    "Post_Dbl_Selection": "Post-Double Selection",
+    "spaceIV": "spaceIV",
+    "spaceTSIV": "spaceTSIV",
+    "IVW": "IVW",
+    "MR_Egger": "MR-Egger",
+    "Weighted_Median": "Weighted Median",
+    "Mode_Based_MR": "Mode-Based MR",
+    "MR_PRESSO": "MR-PRESSO",
+}
+
+ESTIMATOR_ALIASES: Dict[str, Sequence[str]] = {
+    "UP_GMM_L1": ("UP-GMM l1", "UP-GMM ℓ1"),
+    "SplitUP_L1": ("SplitUP l1", "SplitUP ℓ1"),
+    "L1_Reg_2SLS": ("l1-Reg 2SLS", "ℓ1-Reg 2SLS"),
+}
+
+BASELINE_SOURCES: Sequence[str] = (
+    "Schur et al. (2026). Many Experiments, Few Repetitions, Unpaired Data, and Sparse Effects: Is Causal Inference Possible? arXiv:2601.15254",
+    "Pajo (2026). Finite-Sample Performance of SplitUP in Many-Environments Unpaired IV",
+    "Pajo (2026). Capability Cartography Layer 2",
+    "Pajo (2026). Sutskever 30 Beyond NumPy",
+    "Pajo (2026). Sutskever 30 Implementations",
+)
+
+
 def build_registry() -> List[CausalEstimator]:
     """Return the canonical list of 27 estimators."""
 
@@ -416,3 +461,13 @@ class CausalEstimatorRegistry:
         for e in self.estimators.values():
             families[e.family] = families.get(e.family, 0) + 1
         return {"total": len(self.estimators), "by_family": families}
+
+
+def estimator_display_name(name: str) -> str:
+    """Return a human-readable label for an estimator identifier."""
+    return ESTIMATOR_DISPLAY_NAMES.get(name, name)
+
+
+def estimator_aliases(name: str) -> Sequence[str]:
+    """Return known prose aliases for an estimator identifier."""
+    return ESTIMATOR_ALIASES.get(name, ())

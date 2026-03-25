@@ -11,6 +11,21 @@ This repository is designed to sit on top of four companion resources:
 
 These links are preserved explicitly in code and artifacts. The adapter layer records canonical repository URLs and configured local roots so every cartography export can retain its provenance.
 
+## External Baseline Note
+
+This repository should be read alongside the external note:
+
+- `Downloads/In-Paper Causality Analysis- 30 Sutskever Papers × 27 Estimators × 6 Backends × CCL2.md`
+
+That note is useful for the estimator inventory and source list, but it is not identical to the current Layer 3 outputs. In particular:
+
+- the note reports `22 CONFIRMED / 8 CONDITIONAL / 0 UNCONFIRMED`
+- the current Layer 3 artifacts report `27 CONFIRMED / 0 CONDITIONAL / 3 UNCONFIRMED`
+- the note treats `SplitUP ℓ1` as the universal best estimator
+- the current Layer 3 implementation usually selects `spaceTSIV`, `IVW`, `TS-IV`, or `SplitUP (dense)` as the current lowest-MSE estimator, depending on paper and regime
+
+When these differ, treat `artifacts/layer3/causal/*.json` as the repository's current source of truth.
+
 ## The Layer Progression
 
 | Layer | Question | Verb | Key Addition |
@@ -58,14 +73,34 @@ The causal registry contains estimators from seven families:
 
 | Family | Count | Key Members |
 |--------|-------|-------------|
-| classical_IV | 7 | OLS, 2SLS, LIML, Fuller-k, JIVE, RJIVE, SS-IV |
+| classical_IV | 7 | Naive OLS, 2SLS, LIML, Fuller-k, JIVE, RJIVE, SS-IV |
 | two_sample_IV | 2 | TS-IV, TS-2SLS |
-| unpaired_GMM | 2 | UP-GMM, UP-GMM ℓ₁ |
-| splitUP | 3 | SplitUP (dense), SplitUP ℓ₁, SplitUP (analytic) |
-| sparse_regularized | 8 | ℓ₁-Reg 2SLS, Lasso-GMM, GMM-Lasso, FGMM, Desparsified GMM, Post-Dbl-Selection, spaceIV, spaceTSIV |
+| unpaired_GMM | 2 | UP-GMM, UP-GMM l1 |
+| splitUP | 3 | SplitUP (dense), SplitUP l1, SplitUP (analytic) |
+| sparse_regularized | 8 | l1-Reg 2SLS, Lasso-GMM, GMM-Lasso, FGMM, Desparsified GMM, Post-Double Selection, spaceIV, spaceTSIV |
 | MR_robust | 5 | IVW, MR-Egger, Weighted Median, Mode-Based MR, MR-PRESSO |
 
 SplitUP is the only family consistent across all regimes: finite-dimensional instruments, high-dimensional instruments, paired data, unpaired data, dense effects, and sparse effects.
+
+### Naming Conventions
+
+The code uses stable ASCII estimator identifiers in JSON and Python APIs:
+
+- `SplitUP_L1` is rendered in prose as `SplitUP l1` and corresponds to the older note's `SplitUP ℓ1`
+- `UP_GMM_L1` is rendered in prose as `UP-GMM l1` and corresponds to `UP-GMM ℓ1`
+- `L1_Reg_2SLS` is rendered in prose as `l1-Reg 2SLS` and corresponds to `ℓ1-Reg 2SLS`
+
+If you are comparing old figures or notes against the current repo, match on the code identifier first, then on the human-readable label.
+
+### Source Baseline
+
+The current estimator inventory and causal framing are grounded in:
+
+- Schur, F. et al. (2026). *Many Experiments, Few Repetitions, Unpaired Data, and Sparse Effects: Is Causal Inference Possible?* arXiv:2601.15254
+- Pajo, P. (2026). *Finite-Sample Performance of SplitUP in Many-Environments Unpaired IV*
+- Pajo, P. (2026). *Capability Cartography Layer 2*
+- Pajo, P. (2026). *Sutskever 30 Beyond NumPy*
+- Pajo, P. (2026). *Sutskever 30 Implementations*
 
 ## Causal Atlas Pathology Labels
 
@@ -145,9 +180,13 @@ python3 -m capability_cartography.demo
 artifacts/layer3/
 ├── causal/
 │   ├── causal_atlas.json
+│   ├── causal_records.json
+│   ├── estimator_heatmap.png
 │   ├── estimator_sweep_summary.json
 │   ├── middle_regime_summary.json
-│   └── transfer_diagnostics.json
+│   ├── regime_map.png
+│   ├── transfer_diagnostics.json
+│   └── verdict_dashboard.png
 ├── failure_atlas/
 │   └── failure_atlas.json
 ├── measured/
@@ -155,7 +194,8 @@ artifacts/layer3/
 │   ├── measured_records.csv
 │   └── measured_summary.json
 ├── notebooks/
-│   └── 22_scaling_laws.execution.json
+│   ├── 22_scaling_laws.execution.json
+│   └── 22_scaling_laws_figures/
 ├── plots/
 │   ├── onset_surface.png
 │   └── phase_regions.png

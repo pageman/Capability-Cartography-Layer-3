@@ -14,6 +14,7 @@ from typing import Any, Dict
 
 from .agent_integration import SutskeverAgentWorkflowBridge
 from .causal_atlas import CausalAtlasClassifier
+from .causal_registry import BASELINE_SOURCES, estimator_aliases, estimator_display_name
 from .causal_visualization import plot_estimator_heatmap, plot_regime_map, plot_verdict_dashboard
 from .estimator_sweep import EstimatorSweepRunner
 from .failure_atlas import FailureAtlasClassifier
@@ -100,6 +101,8 @@ class FullStudyOrchestrator:
                 "avg_estimator_bias": cons["avg_bias"],
                 "avg_estimator_mse": cons["avg_mse"],
                 "best_estimator": cons["best_estimator"],
+                "best_estimator_display": estimator_display_name(cons["best_estimator"]),
+                "best_estimator_aliases": list(estimator_aliases(cons["best_estimator"])),
                 "retrieval_dependence": 1.0 if paper.paper_type == "retrieval" else 0.0,
                 "capability_score": max(0.1, 0.35 + 0.3 * cons["consensus"] - 0.15 * (1.0 if paper.paper_type == "retrieval" else 0.0)),
                 "generalization_gap": cons["avg_bias"] - 0.05,
@@ -141,10 +144,26 @@ class FullStudyOrchestrator:
         )
 
         # Save records
+        verdict_counts: Dict[str, int] = {}
+        for record in causal_records:
+            verdict = record["causality_verdict"]
+            verdict_counts[verdict] = verdict_counts.get(verdict, 0) + 1
         self.storage.save_json("causal/causal_records.json", causal_records)
         self.storage.save_json("causal/estimator_sweep_summary.json", {
             "total_papers": len(causal_records),
             "total_combinations": sum(len(v) for v in all_paper_results.values()),
+            "verdict_counts": verdict_counts,
+            "best_estimator_display_map": {
+                name: estimator_display_name(name) for name in self.estimator_sweep.registry.all_names()
+            },
+            "best_estimator_alias_map": {
+                name: list(estimator_aliases(name)) for name in self.estimator_sweep.registry.all_names()
+            },
+            "baseline_sources": list(BASELINE_SOURCES),
+            "comparison_note": (
+                "The Downloads causality note is a historical baseline for estimator inventory and sources. "
+                "Current Layer 3 outputs are defined by artifacts/layer3/causal/*.json."
+            ),
         })
 
         # Agent brief
