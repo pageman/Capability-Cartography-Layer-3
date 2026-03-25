@@ -31,9 +31,21 @@ class MeasuredRunExecutor:
         train_steps: int = 4,
         seq_length: int = 24,
         learning_rate: float = 1e-4,
+        allow_fallback: bool = True,
     ) -> Dict[str, Any]:
         if not self.wind_tunnel_adapter.is_available():
-            raise RuntimeError("Measured execution requires the linked GPT-1 wind tunnel repository.")
+            if not allow_fallback:
+                raise RuntimeError(self.wind_tunnel_adapter.missing_dependency_message())
+            return self._fallback_run(
+                task_family=task_family,
+                seed=seed,
+                scale=scale,
+                data_tokens=data_tokens,
+                num_layers=num_layers,
+                train_steps=train_steps,
+                seq_length=seq_length,
+                learning_rate=learning_rate,
+            )
         dataset = self.dataset_builder.build_family_corpus(task_family=task_family, seed=seed, target_tokens=data_tokens)
         module = self.wind_tunnel_adapter.module
         assert module is not None
@@ -91,6 +103,79 @@ class MeasuredRunExecutor:
             "task_family_code": dataset["task_family_code"],
             "generalization_gap": float(generalization_gap),
             "weight_compressibility": weight_profile.to_dict(),
+            "measured_mode": True,
+            "fallback_reason": "",
+            "wind_tunnel_diagnostics": self.wind_tunnel_adapter.diagnostic_summary(),
+        }
+
+    def _fallback_run(
+        self,
+        *,
+        task_family: str,
+        seed: int,
+        scale: int,
+        data_tokens: int,
+        num_layers: int,
+        train_steps: int,
+        seq_length: int,
+        learning_rate: float,
+    ) -> Dict[str, Any]:
+        dataset = self.dataset_builder.build_family_corpus(task_family=task_family, seed=seed, target_tokens=data_tokens)
+        metrics = self.wind_tunnel_adapter.dry_run_metrics(
+            prompt=dataset["train_text"],
+            vocab_size=64,
+            d_model=int(scale),
+            num_heads=max(1, min(4, int(scale) // 16)),
+            num_layers=int(num_layers),
+            d_ff=max(int(scale) * 2, 64),
+            max_seq_len=int(seq_length),
+        )
+        base_capability = float(min(0.95, 0.18 + np.tanh(metrics["capacity_proxy"] / 4000.0) * 0.55))
+        retrieval_dependence = 1.0 if task_family == "retrieval_qa" else 0.0
+        snapshots: List[Dict[str, float]] = []
+        for step in range(1, train_steps + 1):
+            progress = step / max(train_steps, 1)
+            capability = min(base_capability + 0.08 * progress, 0.99)
+            val_loss = max(0.08, 1.15 - capability)
+            holdout_loss = val_loss + 0.01 + 0.02 * retrieval_dependence
+            snapshots.append(
+                {
+                    "capability_score": float(capability),
+                    "loss_proxy": float(val_loss),
+                    "train_loss": float(max(0.05, val_loss - 0.03)),
+                    "holdout_loss": float(holdout_loss),
+                    "retrieval_dependence": float(retrieval_dependence),
+                    "data_tokens": float(data_tokens),
+                    "scale_proxy": float(scale * num_layers),
+                    "task_family_code": float(dataset["task_family_code"]),
+                }
+            )
+
+        weight_profile = self.compressibility.profile_text(
+            dataset["train_text"],
+            predictive_loss=snapshots[-1]["loss_proxy"],
+        )
+        return {
+            "metric_series": snapshots,
+            "train_text": dataset["train_text"],
+            "val_text": dataset["val_text"],
+            "holdout_text": dataset["holdout_text"],
+            "descriptor_hints": dataset["descriptor_hints"],
+            "task_family_code": dataset["task_family_code"],
+            "generalization_gap": float(snapshots[-1]["holdout_loss"] - snapshots[-1]["loss_proxy"]),
+            "weight_compressibility": weight_profile.to_dict(),
+            "measured_mode": False,
+            "fallback_reason": self.wind_tunnel_adapter.missing_dependency_message(),
+            "wind_tunnel_diagnostics": self.wind_tunnel_adapter.diagnostic_summary(),
+            "fallback_config": {
+                "seed": int(seed),
+                "scale": int(scale),
+                "data_tokens": int(data_tokens),
+                "num_layers": int(num_layers),
+                "train_steps": int(train_steps),
+                "seq_length": int(seq_length),
+                "learning_rate": float(learning_rate),
+            },
         }
 
     def _train_step(self, module, model, optimizer, encoded_train: List[int], *, seq_length: int, step: int, seed: int) -> float:

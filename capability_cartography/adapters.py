@@ -57,6 +57,43 @@ class NotebookSubstrateAdapter:
     def __init__(self, root: Path | str | None = None):
         self.root = _resolve_root(root, "SUTSKEVER30_ROOT", self.DEFAULT_CANDIDATES)
 
+    @classmethod
+    def expected_paths(cls) -> List[str]:
+        return [str(Path(candidate).expanduser()) for candidate in cls.DEFAULT_CANDIDATES]
+
+    def notebook_path(self, notebook_name: str) -> Path | None:
+        if self.root is None:
+            return None
+        return self.root / f"{notebook_name}.ipynb"
+
+    def diagnostic_summary(self, notebook_name: str | None = None) -> Dict[str, Any]:
+        notebook_path = self.notebook_path(notebook_name) if notebook_name is not None else None
+        return {
+            "env_var": "SUTSKEVER30_ROOT",
+            "configured_root": str(self.root) if self.root is not None else None,
+            "notebook_name": notebook_name,
+            "notebook_path": str(notebook_path) if notebook_path is not None else None,
+            "notebook_exists": bool(notebook_path and notebook_path.exists()),
+            "searched_candidates": self.expected_paths(),
+            "canonical_repository": self.CANONICAL_REPOSITORY,
+            "available": bool(self.root and self.root.exists()),
+        }
+
+    def missing_dependency_message(self, notebook_name: str | None = None) -> str:
+        diagnostic = self.diagnostic_summary(notebook_name)
+        searched = "\n".join(f"  - {path}" for path in diagnostic["searched_candidates"])
+        configured = diagnostic["configured_root"] or "<unset>"
+        target = diagnostic["notebook_path"] or "<unresolved>"
+        target_name = diagnostic["notebook_name"] or "<unspecified>"
+        return (
+            "Notebook execution requires the linked Sutskever-30 substrate repository.\n"
+            f"Set {diagnostic['env_var']} to the repo root containing `{target_name}.ipynb`.\n"
+            f"Configured root: {configured}\n"
+            f"Expected notebook: {target}\n"
+            f"Searched candidate roots:\n{searched}\n"
+            f"Canonical repository: {diagnostic['canonical_repository']}"
+        )
+
     def list_notebooks(self) -> List[Dict[str, str]]:
         if self.root is None or not self.root.exists():
             return []
@@ -74,10 +111,11 @@ class NotebookSubstrateAdapter:
 
     def describe_notebook(self, notebook_name: str) -> Dict[str, Any]:
         if self.root is None:
-            raise FileNotFoundError("Notebook substrate root is not configured.")
-        path = self.root / f"{notebook_name}.ipynb"
+            raise FileNotFoundError(self.missing_dependency_message(notebook_name))
+        path = self.notebook_path(notebook_name)
+        assert path is not None
         if not path.exists():
-            raise FileNotFoundError(f"Notebook not found: {path}")
+            raise FileNotFoundError(self.missing_dependency_message(notebook_name))
         return {
             "name": notebook_name,
             "path": str(path),
@@ -112,6 +150,41 @@ class GPT1WindTunnelAdapter:
             if path.exists():
                 self.module = self._load_module(path)
 
+    @classmethod
+    def expected_paths(cls) -> List[str]:
+        return [str(Path(candidate).expanduser()) for candidate in cls.DEFAULT_CANDIDATES]
+
+    def implementation_path(self) -> Path | None:
+        if self.root is None:
+            return None
+        return self.root / "gpt1_complete_implementation.py"
+
+    def diagnostic_summary(self) -> Dict[str, Any]:
+        implementation_path = self.implementation_path()
+        return {
+            "env_var": "GPT1_WIND_TUNNEL_ROOT",
+            "configured_root": str(self.root) if self.root is not None else None,
+            "implementation_path": str(implementation_path) if implementation_path is not None else None,
+            "implementation_exists": bool(implementation_path and implementation_path.exists()),
+            "searched_candidates": self.expected_paths(),
+            "canonical_repository": self.CANONICAL_REPOSITORY,
+            "available": self.is_available(),
+        }
+
+    def missing_dependency_message(self) -> str:
+        diagnostic = self.diagnostic_summary()
+        searched = "\n".join(f"  - {path}" for path in diagnostic["searched_candidates"])
+        configured = diagnostic["configured_root"] or "<unset>"
+        expected = diagnostic["implementation_path"] or "<unresolved>"
+        return (
+            "Measured execution requires the linked GPT-1 wind tunnel repository.\n"
+            f"Set {diagnostic['env_var']} to the repo root containing `gpt1_complete_implementation.py`.\n"
+            f"Configured root: {configured}\n"
+            f"Expected file: {expected}\n"
+            f"Searched candidate roots:\n{searched}\n"
+            f"Canonical repository: {diagnostic['canonical_repository']}"
+        )
+
     @staticmethod
     def _load_module(path: Path):
         spec = importlib.util.spec_from_file_location("gpt1_complete_implementation", path)
@@ -126,7 +199,7 @@ class GPT1WindTunnelAdapter:
 
     def instantiate(self, **config: Any):
         if self.module is None:
-            raise RuntimeError("GPT-1 wind tunnel root is not configured or the implementation file is missing.")
+            raise RuntimeError(self.missing_dependency_message())
         model_cls = getattr(self.module, "GPT1")
         return model_cls(**config)
 

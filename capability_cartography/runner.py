@@ -116,6 +116,7 @@ class CapabilityCartographyRunner:
         data_tokens: int,
         train_steps: int = 4,
         export_dir: str | Path | None = None,
+        allow_fallback: bool = True,
     ) -> ArtifactBundle:
         measured = self.measured_executor.run(
             task_family=task_family,
@@ -126,6 +127,7 @@ class CapabilityCartographyRunner:
             train_steps=train_steps,
             seq_length=int(intervention.context_geometry.get("max_seq_len", 24)),
             learning_rate=float(intervention.objective.get("learning_rate", 1e-4)),
+            allow_fallback=allow_fallback,
         )
         text = measured["train_text"]
         bundle = self.run_text_experiment(
@@ -137,8 +139,15 @@ class CapabilityCartographyRunner:
             export_dir=export_dir,
         )
         bundle.trajectory.aggregate_metrics["generalization_gap"] = measured["generalization_gap"]
-        bundle.trajectory.aggregate_metrics["measured_mode"] = True
+        bundle.trajectory.aggregate_metrics["measured_mode"] = bool(measured.get("measured_mode", True))
         bundle.trajectory.aggregate_metrics["weight_compressibility"] = measured["weight_compressibility"]
+        bundle.trajectory.aggregate_metrics["wind_tunnel_available"] = self.wind_tunnel_adapter.is_available()
+        bundle.trajectory.aggregate_metrics["wind_tunnel_diagnostics"] = measured.get(
+            "wind_tunnel_diagnostics",
+            self.wind_tunnel_adapter.diagnostic_summary(),
+        )
+        if measured.get("fallback_reason"):
+            bundle.trajectory.aggregate_metrics["fallback_reason"] = measured["fallback_reason"]
         bundle.spec.metadata.update(
             {
                 "seed": seed,
@@ -149,6 +158,8 @@ class CapabilityCartographyRunner:
                 "descriptor_hints": measured["descriptor_hints"],
             }
         )
+        if measured.get("fallback_config"):
+            bundle.spec.metadata["fallback_config"] = measured["fallback_config"]
         if export_dir is not None:
             bundle.export_path = self.export(bundle, export_dir=export_dir)
         return bundle

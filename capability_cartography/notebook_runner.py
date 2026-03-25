@@ -17,6 +17,27 @@ class NotebookExecutionWrapper:
     def __init__(self, substrate_adapter: NotebookSubstrateAdapter):
         self.substrate_adapter = substrate_adapter
 
+    def fallback_report(self, notebook_name: str, *, output_dir: str | Path) -> Dict[str, object]:
+        output_dir = Path(output_dir)
+        output_dir.mkdir(parents=True, exist_ok=True)
+        diagnostic = self.substrate_adapter.diagnostic_summary(notebook_name)
+        payload = {
+            "notebook_name": notebook_name,
+            "script_path": "",
+            "returncode": -1,
+            "stdout": "",
+            "stderr": self.substrate_adapter.missing_dependency_message(notebook_name),
+            "figure_dir": str(output_dir / f"{notebook_name}_figures"),
+            "generated_figures": [],
+            "executed": False,
+            "fallback_reason": self.substrate_adapter.missing_dependency_message(notebook_name),
+            "substrate_diagnostics": diagnostic,
+        }
+        report_path = output_dir / f"{notebook_name}.execution.json"
+        report_path.write_text(json.dumps(payload, indent=2))
+        payload["report_path"] = str(report_path)
+        return payload
+
     def export_notebook_script(self, notebook_name: str, *, output_dir: str | Path) -> str:
         notebook_info = self.substrate_adapter.describe_notebook(notebook_name)
         notebook_path = Path(notebook_info["path"])
@@ -62,7 +83,20 @@ class NotebookExecutionWrapper:
         script_path.write_text("\n".join(script_lines))
         return str(script_path)
 
-    def execute_notebook(self, notebook_name: str, *, output_dir: str | Path, timeout_seconds: int = 60) -> Dict[str, object]:
+    def execute_notebook(
+        self,
+        notebook_name: str,
+        *,
+        output_dir: str | Path,
+        timeout_seconds: int = 60,
+        allow_fallback: bool = True,
+    ) -> Dict[str, object]:
+        if not self.substrate_adapter.root or not self.substrate_adapter.root.exists():
+            if allow_fallback:
+                return self.fallback_report(notebook_name, output_dir=output_dir)
+        elif self.substrate_adapter.notebook_path(notebook_name) is not None and not self.substrate_adapter.notebook_path(notebook_name).exists():
+            if allow_fallback:
+                return self.fallback_report(notebook_name, output_dir=output_dir)
         script_path = self.export_notebook_script(notebook_name, output_dir=output_dir)
         env = dict(os.environ)
         env.setdefault("MPLBACKEND", "Agg")
@@ -82,6 +116,9 @@ class NotebookExecutionWrapper:
             "stderr": result.stderr[-4000:],
             "figure_dir": str(figure_dir),
             "generated_figures": sorted(str(path) for path in figure_dir.glob("*.png")),
+            "executed": True,
+            "fallback_reason": "",
+            "substrate_diagnostics": self.substrate_adapter.diagnostic_summary(notebook_name),
         }
         report_path = Path(output_dir) / f"{notebook_name}.execution.json"
         report_path.write_text(json.dumps(payload, indent=2))

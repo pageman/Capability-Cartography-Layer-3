@@ -205,6 +205,31 @@ export SUTSKEVER_AGENT_ROOT=/path/to/Sutskever-Agent/sutskever-agent
 export BEYOND_NUMPY_ROOT=/path/to/sutskever-30-beyond-numpy
 ```
 
+### Preflight check
+
+```bash
+python3 - <<'PY'
+from capability_cartography.adapters import GPT1WindTunnelAdapter, NotebookSubstrateAdapter
+
+for label, diagnostic in [
+    ("substrate", NotebookSubstrateAdapter().diagnostic_summary("22_scaling_laws")),
+    ("wind_tunnel", GPT1WindTunnelAdapter().diagnostic_summary()),
+]:
+    print(f"{label}_available:", diagnostic["available"])
+    print("configured_root:", diagnostic["configured_root"])
+    expected_target = diagnostic.get("notebook_path") or diagnostic.get("implementation_path")
+    print("expected_target:", expected_target)
+    print("searched_candidates:")
+    for path in diagnostic["searched_candidates"]:
+        print(" -", path)
+    print()
+PY
+```
+
+If the GPT-1 repo is missing, measured runs now fall back to a synthetic-backed path instead of crashing. The exported measured artifacts set `measured_mode: false` and include `fallback_reason` plus `wind_tunnel_diagnostics`. To keep strict fail-fast behavior, call the measured runner with `allow_fallback=False`.
+
+If the substrate repo is missing, notebook execution now emits a structured fallback report instead of failing obscurely. The notebook report includes `executed: false`, `fallback_reason`, and `substrate_diagnostics`.
+
 ## Quick Start
 
 ```bash

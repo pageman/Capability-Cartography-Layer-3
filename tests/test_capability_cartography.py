@@ -25,6 +25,7 @@ from capability_cartography.iv_estimators import (
     fuller, generate_iv_data, ivw, liml, mr_egger, ols, splitup, splitup_analytic, ts_iv, tsls, up_gmm,
 )
 from capability_cartography.middle_regime import MiddleRegimeAnalyzer, classify_regime, measurement_error_bias
+from capability_cartography.notebook_runner import NotebookExecutionWrapper
 from capability_cartography.paper_registry import PaperRegistry
 from capability_cartography.runner import CapabilityCartographyRunner
 from capability_cartography.schemas import (
@@ -362,6 +363,97 @@ class SchemaTests(unittest.TestCase):
 
 
 class InheritedLayerTwoTests(unittest.TestCase):
+    def test_notebook_adapter_missing_dependency_message_is_actionable(self):
+        adapter = NotebookSubstrateAdapter("/nonexistent")
+        message = adapter.missing_dependency_message("22_scaling_laws")
+        self.assertIn("SUTSKEVER30_ROOT", message)
+        self.assertIn("22_scaling_laws.ipynb", message)
+        self.assertIn("Canonical repository", message)
+
+    def test_notebook_runner_falls_back_when_substrate_missing(self):
+        wrapper = NotebookExecutionWrapper(NotebookSubstrateAdapter("/nonexistent"))
+        with TemporaryDirectory() as td:
+            report = wrapper.execute_notebook("22_scaling_laws", output_dir=td)
+        self.assertFalse(report["executed"])
+        self.assertIn("fallback_reason", report)
+        self.assertEqual(report["substrate_diagnostics"]["env_var"], "SUTSKEVER30_ROOT")
+
+    def test_notebook_runner_can_fail_strictly(self):
+        wrapper = NotebookExecutionWrapper(NotebookSubstrateAdapter("/nonexistent"))
+        with TemporaryDirectory() as td:
+            with self.assertRaises(FileNotFoundError) as ctx:
+                wrapper.execute_notebook("22_scaling_laws", output_dir=td, allow_fallback=False)
+        self.assertIn("SUTSKEVER30_ROOT", str(ctx.exception))
+
+    def test_gpt1_adapter_missing_dependency_message_is_actionable(self):
+        adapter = GPT1WindTunnelAdapter("/nonexistent")
+        message = adapter.missing_dependency_message()
+        self.assertIn("GPT1_WIND_TUNNEL_ROOT", message)
+        self.assertIn("gpt1_complete_implementation.py", message)
+        self.assertIn("Canonical repository", message)
+
+    def test_runner_measured_experiment_falls_back_when_repo_missing(self):
+        runner = CapabilityCartographyRunner(wind_tunnel_adapter=GPT1WindTunnelAdapter("/nonexistent"))
+        intv = InterventionConfig(
+            architecture={"d_model": 32, "num_layers": 2},
+            objective={"loss_type": "next_token"},
+            data_regime={},
+            retrieval={},
+            context_geometry={"max_seq_len": 24},
+        )
+        spec = ExperimentSpec(
+            experiment_id="measured-fallback",
+            substrate="gpt1-from-sutskever30",
+            task_name="qa",
+            benchmark_label="u",
+            realism_level="semi_synthetic",
+            objective_type="next_token",
+            model_family="gpt1",
+        )
+        bundle = runner.run_measured_experiment(
+            spec,
+            intv,
+            task_family="object_tracking",
+            seed=1,
+            scale=32,
+            data_tokens=512,
+            train_steps=2,
+        )
+        self.assertFalse(bundle.trajectory.aggregate_metrics["measured_mode"])
+        self.assertIn("fallback_reason", bundle.trajectory.aggregate_metrics)
+        self.assertFalse(bundle.trajectory.aggregate_metrics["wind_tunnel_available"])
+
+    def test_runner_measured_experiment_can_fail_strictly(self):
+        runner = CapabilityCartographyRunner(wind_tunnel_adapter=GPT1WindTunnelAdapter("/nonexistent"))
+        intv = InterventionConfig(
+            architecture={"d_model": 32, "num_layers": 2},
+            objective={"loss_type": "next_token"},
+            data_regime={},
+            retrieval={},
+            context_geometry={"max_seq_len": 24},
+        )
+        spec = ExperimentSpec(
+            experiment_id="measured-strict",
+            substrate="gpt1-from-sutskever30",
+            task_name="qa",
+            benchmark_label="u",
+            realism_level="semi_synthetic",
+            objective_type="next_token",
+            model_family="gpt1",
+        )
+        with self.assertRaises(RuntimeError) as ctx:
+            runner.run_measured_experiment(
+                spec,
+                intv,
+                task_family="object_tracking",
+                seed=1,
+                scale=32,
+                data_tokens=512,
+                train_steps=2,
+                allow_fallback=False,
+            )
+        self.assertIn("GPT1_WIND_TUNNEL_ROOT", str(ctx.exception))
+
     def test_descriptor_extraction(self):
         ext = TaskDescriptorExtractor()
         d = ext.extract_text_descriptor("Alice retrieves the passage.", task_name="qa",
